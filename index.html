@@ -1,1 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบบันทึกข้อมูลปฏิบัติงาน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; font-family: 'Prompt', sans-serif; }
+    body { background-color: #f0f4f8; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .container { background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); width: 100%; max-width: 480px; }
+    h2 { text-align: center; color: #1e293b; margin-top: 0; }
+    .row-2col { display: flex; gap: 12px; }
+    .row-2col .form-group { flex: 1; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; color: #475569; font-size: 14px; font-weight: 500; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; background-color: #fff; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    button { width: 100%; padding: 12px; background-color: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 500; cursor: pointer; margin-top: 10px; }
+    button:hover { background-color: #1d4ed8; }
+    button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    .btn-logout { background-color: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin: 0; }
+    .btn-logout:hover { background-color: #dc2626; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+    .hidden { display: none; }
+    .alert { padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; text-align: center; }
+    .alert-error { background-color: #fee2e2; color: #b91c1c; }
+    .alert-success { background-color: #dcfce7; color: #15803d; }
+  </style>
+</head>
+<body>
 
+  <!-- หน้าจอ Login -->
+  <div id="loginSection" class="container">
+    <h2>เข้าสู่ระบบบันทึกข้อมูล</h2>
+    <div id="loginAlert" class="alert alert-error hidden"></div>
+    <form id="loginForm">
+      <div class="form-group">
+        <label>ชื่อผู้ใช้งาน (Username)</label>
+        <input type="text" id="username" required placeholder="กรอกชื่อผู้ใช้งาน">
+      </div>
+      <div class="form-group">
+        <label>รหัสผ่าน (Password)</label>
+        <input type="password" id="password" required placeholder="กรอกรหัสผ่าน">
+      </div>
+      <button type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+    </form>
+  </div>
+
+  <!-- หน้าจอฟอร์มกรอกข้อมูล -->
+  <div id="formSection" class="container hidden">
+    <div class="header-bar">
+      <div>
+        <strong style="color:#1e293b;">บันทึกข้อมูลปฏิบัติงาน</strong><br>
+        <small style="color:#64748b;">ผู้ใช้งาน: <span id="currentUserDisplay"></span></small>
+      </div>
+      <button type="button" class="btn-logout" onclick="logout()">ออกจากระบบ</button>
+    </div>
+
+    <div id="formAlert" class="alert hidden"></div>
+
+    <form id="recordForm">
+      <div class="row-2col">
+        <div class="form-group">
+          <label>วันที่ *</label>
+          <input type="date" id="workDate" required>
+        </div>
+        <div class="form-group">
+          <label>เวลา (กะทำงาน) *</label>
+          <select id="workTime" required>
+            <option value="08.30-16.30">08:30 น.-16:30 น.</option>
+            <option value="16.30-08.30">16:30 น.-08:30 น.</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>ชื่อพนักงาน *</label>
+        <select id="staffSelect" required onchange="onStaffChange()">
+          <option value="">-- เลือกรายชื่อพนักงาน --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>เบอร์โทรพนักงาน *</label>
+        <input type="tel" id="staffPhone" required placeholder="เลือกชื่อพนักงานเพื่อดึงเบอร์อัตโนมัติ">
+      </div>
+
+      <div class="form-group">
+        <label>ชื่อคนงาน *</label>
+        <select id="workerSelect" required>
+          <option value="">-- เลือกรายชื่อคนงาน --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>หมายเหตุ / รายละเอียดงาน</label>
+        <textarea id="note" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+      </div>
+
+      <button type="submit" id="submitBtn">บันทึกข้อมูล</button>
+    </form>
+  </div>
+
+  <script>
+    let currentUser = "";
+    let staffDataList = [];
+
+    // ตั้งค่าวันที่ปัจจุบันเป็นค่าเริ่มต้น (รูปแบบ YYYY-MM-DD ตามมาตรฐาน input type="date")
+    function setDefaultDate() {
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, '0');
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const yyyy = now.getFullYear();
+      document.getElementById('workDate').value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    // สร้าง Dropdown พนักงาน
+    function populateStaffDropdown(list) {
+      staffDataList = list;
+      const select = document.getElementById('staffSelect');
+      select.innerHTML = '<option value="">-- เลือกรายชื่อพนักงาน --</option>';
+      list.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.name;
+        opt.textContent = item.name;
+        select.appendChild(opt);
+      });
+    }
+
+    // สร้าง Dropdown คนงาน
+    function populateWorkerDropdown(list) {
+      const select = document.getElementById('workerSelect');
+      select.innerHTML = '<option value="">-- เลือกรายชื่อคนงาน --</option>';
+      list.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item;
+        opt.textContent = item;
+        select.appendChild(opt);
+      });
+    }
+
+    // เติมเบอร์โทรศัพท์อัตโนมัติเมื่อเลือกชื่อพนักงาน
+    function onStaffChange() {
+      const selectedName = document.getElementById('staffSelect').value;
+      const phoneInput = document.getElementById('staffPhone');
+      const found = staffDataList.find(s => s.name === selectedName);
+      phoneInput.value = found ? found.phone : "";
+    }
+
+    // จัดการการ Login
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value.trim();
+      const btn = document.getElementById('loginBtn');
+      const alertBox = document.getElementById('loginAlert');
+
+      btn.disabled = true;
+      btn.textContent = "กำลังโหลดข้อมูล...";
+      alertBox.classList.add('hidden');
+
+      google.script.run.withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.textContent = "เข้าสู่ระบบ";
+        if (res.success) {
+          currentUser = res.user;
+          document.getElementById('currentUserDisplay').textContent = currentUser;
+          
+          populateStaffDropdown(res.staffList);
+          populateWorkerDropdown(res.workerList);
+          setDefaultDate();
+
+          document.getElementById('loginSection').classList.add('hidden');
+          document.getElementById('formSection').classList.remove('hidden');
+          document.getElementById('loginForm').reset();
+        } else {
+          alertBox.textContent = res.message;
+          alertBox.classList.remove('hidden');
+        }
+      }).checkLoginAndGetLists(user, pass);
+    });
+
+    // จัดการการบันทึกข้อมูล
+    document.getElementById('recordForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const alertBox = document.getElementById('formAlert');
+
+      const payload = {
+        workDate: document.getElementById('workDate').value,
+        workTime: document.getElementById('workTime').value,
+        staffName: document.getElementById('staffSelect').value,
+        staffPhone: document.getElementById('staffPhone').value.trim(),
+        workerName: document.getElementById('workerSelect').value,
+        note: document.getElementById('note').value.trim(),
+        recordedBy: currentUser
+      };
+
+      btn.disabled = true;
+      btn.textContent = "กำลังบันทึก...";
+      alertBox.classList.add('hidden');
+
+      google.script.run.withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.textContent = "บันทึกข้อมูล";
+        alertBox.textContent = res.message;
+        alertBox.className = res.success ? "alert alert-success" : "alert alert-error";
+        alertBox.classList.remove('hidden');
+
+        if (res.success) {
+          document.getElementById('recordForm').reset();
+          setDefaultDate();
+          setTimeout(() => alertBox.classList.add('hidden'), 3500);
+        }
+      }).saveRecordData(payload);
+    });
+
+    function logout() {
+      currentUser = "";
+      document.getElementById('formSection').classList.add('hidden');
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('formAlert').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
