@@ -2,7 +2,8 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>ระบบบันทึกข้อมูลปฏิบัติงาน</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบันทึกข้อมูลปฏิบัติงาน กฟส.บัวลาย</title>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; font-family: 'Prompt', sans-serif; }
@@ -102,10 +103,11 @@
   </div>
 
   <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyec0BDbfIc8JHniH7487XLcdhWwubdyIOAG709mCEdIOVmMcVx6xBNTD9p87CimFfF/exec";
+
     let currentUser = "";
     let staffDataList = [];
 
-    // ตั้งค่าวันที่ปัจจุบันเป็นค่าเริ่มต้น (รูปแบบ YYYY-MM-DD ตามมาตรฐาน input type="date")
     function setDefaultDate() {
       const now = new Date();
       const dd = String(now.getDate()).padStart(2, '0');
@@ -114,7 +116,6 @@
       document.getElementById('workDate').value = `${yyyy}-${mm}-${dd}`;
     }
 
-    // สร้าง Dropdown พนักงาน
     function populateStaffDropdown(list) {
       staffDataList = list;
       const select = document.getElementById('staffSelect');
@@ -127,7 +128,6 @@
       });
     }
 
-    // สร้าง Dropdown คนงาน
     function populateWorkerDropdown(list) {
       const select = document.getElementById('workerSelect');
       select.innerHTML = '<option value="">-- เลือกรายชื่อคนงาน --</option>';
@@ -139,16 +139,24 @@
       });
     }
 
-    // เติมเบอร์โทรศัพท์อัตโนมัติเมื่อเลือกชื่อพนักงาน
     function onStaffChange() {
       const selectedName = document.getElementById('staffSelect').value;
       const phoneInput = document.getElementById('staffPhone');
       const found = staffDataList.find(s => s.name === selectedName);
-      phoneInput.value = found ? found.phone : "";
+      phoneInput.value = found ? String(found.phone).replace(/[\s-]/g, '') : "";
+    }
+
+    async function callAppsScript(payload) {
+      const response = await fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      return await response.json();
     }
 
     // จัดการการ Login
-    document.getElementById('loginForm').addEventListener('submit', function(e) {
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const user = document.getElementById('username').value.trim();
       const pass = document.getElementById('password').value.trim();
@@ -159,9 +167,16 @@
       btn.textContent = "กำลังโหลดข้อมูล...";
       alertBox.classList.add('hidden');
 
-      google.script.run.withSuccessHandler(function(res) {
+      try {
+        const res = await callAppsScript({
+          action: "login",
+          username: user,
+          password: pass
+        });
+
         btn.disabled = false;
         btn.textContent = "เข้าสู่ระบบ";
+
         if (res.success) {
           currentUser = res.user;
           document.getElementById('currentUserDisplay').textContent = currentUser;
@@ -177,20 +192,26 @@
           alertBox.textContent = res.message;
           alertBox.classList.remove('hidden');
         }
-      }).checkLoginAndGetLists(user, pass);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "เข้าสู่ระบบ";
+        alertBox.textContent = "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบ Web App URL";
+        alertBox.classList.remove('hidden');
+      }
     });
 
     // จัดการการบันทึกข้อมูล
-    document.getElementById('recordForm').addEventListener('submit', function(e) {
+    document.getElementById('recordForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
       const alertBox = document.getElementById('formAlert');
 
       const payload = {
+        action: "save",
         workDate: document.getElementById('workDate').value,
         workTime: document.getElementById('workTime').value,
         staffName: document.getElementById('staffSelect').value,
-        staffPhone: document.getElementById('staffPhone').value.trim(),
+        staffPhone: document.getElementById('staffPhone').value.replace(/[\s-]/g, '').trim(),
         workerName: document.getElementById('workerSelect').value,
         note: document.getElementById('note').value.trim(),
         recordedBy: currentUser
@@ -200,7 +221,9 @@
       btn.textContent = "กำลังบันทึก...";
       alertBox.classList.add('hidden');
 
-      google.script.run.withSuccessHandler(function(res) {
+      try {
+        const res = await callAppsScript(payload);
+
         btn.disabled = false;
         btn.textContent = "บันทึกข้อมูล";
         alertBox.textContent = res.message;
@@ -212,7 +235,13 @@
           setDefaultDate();
           setTimeout(() => alertBox.classList.add('hidden'), 3500);
         }
-      }).saveRecordData(payload);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "บันทึกข้อมูล";
+        alertBox.textContent = "บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+        alertBox.className = "alert alert-error";
+        alertBox.classList.remove('hidden');
+      }
     });
 
     function logout() {
